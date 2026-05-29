@@ -44,8 +44,10 @@ import {
   Copy,
   ChevronLeft,
   ChevronRight,
+  Calendar,
   Edit2,
   List,
+  Circle,
   CheckCircle2,
 } from "lucide-react";
 
@@ -110,10 +112,13 @@ interface Investment {
   name: string;
   type: string;
   monthlyContribution: number;
-  frequency?: string; // Monthly, Quarterly, Yearly
+  frequency?: string;
   totalInvested: number;
   currentValue: number;
   treatAsExpense: boolean;
+  showReturns?: boolean; // Toggles the green/red percentages
+  interestRate?: number; // Used for FD/RD/Others
+  durationDays?: number; // Used for FD/RD/Others
 }
 
 interface MonthEndTask {
@@ -379,6 +384,7 @@ const SEED_INVESTMENTS: Investment[] = [
     totalInvested: 45000,
     currentValue: 52300,
     treatAsExpense: false,
+    showReturns: true,
   },
   {
     id: "i2",
@@ -389,6 +395,7 @@ const SEED_INVESTMENTS: Investment[] = [
     totalInvested: 15000,
     currentValue: 16100,
     treatAsExpense: false,
+    showReturns: false,
   },
   {
     id: "i3",
@@ -399,6 +406,7 @@ const SEED_INVESTMENTS: Investment[] = [
     totalInvested: 21156,
     currentValue: 9500,
     treatAsExpense: true,
+    showReturns: false,
   },
 ];
 
@@ -1527,6 +1535,22 @@ function InvestmentsView() {
                   : inv.frequency === "Yearly"
                     ? "/yr"
                     : "/mo";
+              const isMaturityType = ["FD", "RD", "Others"].includes(inv.type);
+
+              const returns = inv.currentValue - inv.totalInvested;
+              const returnsPct =
+                inv.totalInvested > 0 ? (returns / inv.totalInvested) * 100 : 0;
+              const isPositive = returns >= 0;
+
+              let maturityAmount = 0;
+              if (isMaturityType && inv.interestRate && inv.durationDays) {
+                // Projection formula: Principal + Simple Interest based on days
+                maturityAmount =
+                  inv.totalInvested +
+                  inv.totalInvested *
+                    (inv.interestRate / 100) *
+                    (inv.durationDays / 365);
+              }
 
               return (
                 <Card
@@ -1554,10 +1578,32 @@ function InvestmentsView() {
                       <p className="font-bold text-lg text-slate-900 dark:text-white">
                         ₹{inv.currentValue.toLocaleString()}
                       </p>
+                      {inv.showReturns && (
+                        <p
+                          className={`text-xs font-medium flex items-center justify-end ${isPositive ? "text-emerald-500" : "text-rose-500"}`}
+                        >
+                          {isPositive ? (
+                            <TrendingUp size={12} className="mr-1" />
+                          ) : (
+                            <ArrowDown size={12} className="mr-1" />
+                          )}
+                          {isPositive ? "+" : ""}₹
+                          {Math.abs(returns).toLocaleString()} (
+                          {returnsPct.toFixed(1)}%)
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    Total Invested: ₹{inv.totalInvested.toLocaleString()}
+                  <div className="text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                    <span>
+                      Total Invested: ₹{inv.totalInvested.toLocaleString()}
+                    </span>
+                    {isMaturityType && inv.interestRate && inv.durationDays ? (
+                      <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                        Est. Maturity: ₹
+                        {Math.round(maturityAmount).toLocaleString()}
+                      </span>
+                    ) : null}
                   </div>
                 </Card>
               );
@@ -2017,6 +2063,7 @@ export default function App() {
     treatAsExpense: false,
     type: "MF",
     frequency: "Monthly",
+    showReturns: true,
   });
   const [taskForm, setTaskForm] = useState<Partial<MonthEndTask>>({ text: "" });
 
@@ -2410,7 +2457,11 @@ export default function App() {
   const openInvestmentModal = (i?: Investment) => {
     if (i) {
       setEditingInv(i);
-      setInvForm({ ...i, frequency: i.frequency || "Monthly" });
+      setInvForm({
+        ...i,
+        frequency: i.frequency || "Monthly",
+        showReturns: i.showReturns ?? true,
+      });
     } else {
       setEditingInv(undefined);
       setInvForm({
@@ -2421,6 +2472,7 @@ export default function App() {
         totalInvested: 0,
         currentValue: 0,
         treatAsExpense: false,
+        showReturns: true,
       });
     }
     setIsInvModalOpen(true);
@@ -3368,7 +3420,9 @@ export default function App() {
                   <option value="PPF">PPF</option>
                   <option value="LIC">LIC / Insurance</option>
                   <option value="FD">Fixed Deposit</option>
+                  <option value="RD">Recurring Deposit</option>
                   <option value="STOCK">Stocks</option>
+                  <option value="Others">Others</option>
                 </select>
               </div>
               <div>
@@ -3441,27 +3495,91 @@ export default function App() {
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
               />
             </div>
-            <div className="flex items-center gap-2 pt-2">
-              <input
-                type="checkbox"
-                id="treatAsExpense"
-                checked={invForm.treatAsExpense || false}
-                onChange={(e) =>
-                  setInvForm((prev) => ({
-                    ...prev,
-                    treatAsExpense: e.target.checked,
-                  }))
-                }
-                className="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
-              />
-              <label
-                htmlFor="treatAsExpense"
-                className="text-sm font-medium text-slate-700 dark:text-slate-300"
-              >
-                Treat contribution as an Expense in Budgets
-              </label>
+
+            {["FD", "RD", "Others"].includes(invForm.type || "") && (
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-700 mt-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                    Expected Interest Rate (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={invForm.interestRate || ""}
+                    onChange={(e) =>
+                      setInvForm((prev) => ({
+                        ...prev,
+                        interestRate: Number(e.target.value),
+                      }))
+                    }
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                    placeholder="e.g. 7.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                    Duration (in Days)
+                  </label>
+                  <input
+                    type="number"
+                    value={invForm.durationDays || ""}
+                    onChange={(e) =>
+                      setInvForm((prev) => ({
+                        ...prev,
+                        durationDays: Number(e.target.value),
+                      }))
+                    }
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                    placeholder="e.g. 365"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="treatAsExpense"
+                  checked={invForm.treatAsExpense || false}
+                  onChange={(e) =>
+                    setInvForm((prev) => ({
+                      ...prev,
+                      treatAsExpense: e.target.checked,
+                    }))
+                  }
+                  className="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                />
+                <label
+                  htmlFor="treatAsExpense"
+                  className="text-sm font-medium text-slate-700 dark:text-slate-300"
+                >
+                  Treat contribution as an Expense in Budgets
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="showReturns"
+                  checked={invForm.showReturns || false}
+                  onChange={(e) =>
+                    setInvForm((prev) => ({
+                      ...prev,
+                      showReturns: e.target.checked,
+                    }))
+                  }
+                  className="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                />
+                <label
+                  htmlFor="showReturns"
+                  className="text-sm font-medium text-slate-700 dark:text-slate-300"
+                >
+                  Track Performance (Show Rise/Drop %)
+                </label>
+              </div>
             </div>
-            <div className="flex gap-3 pt-2">
+
+            <div className="flex gap-3 pt-4">
               {editingInv && (
                 <button
                   onClick={handleDeleteInvestment}
