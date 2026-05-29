@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+/* Tell Tailwind v4 to listen to our manual dark mode button instead of OS settings */
+@variant dark (&:is(.dark *));
+
+/* Custom scrollbar for the modals */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 20px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #334155;
+}
