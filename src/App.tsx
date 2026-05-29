@@ -44,10 +44,8 @@ import {
   Copy,
   ChevronLeft,
   ChevronRight,
-  Calendar,
   Edit2,
   List,
-  Circle,
   CheckCircle2,
 } from "lucide-react";
 
@@ -629,9 +627,6 @@ function DashboardView() {
     "both",
   );
 
-  const [showAllCommitments, setShowAllCommitments] = useState(false);
-  const [showAllTransactions, setShowAllTransactions] = useState(false);
-
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
 
   const currentMonthExpenses = transactions
@@ -681,9 +676,7 @@ function DashboardView() {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [commitments]);
 
-  const displayedCommitments = showAllCommitments
-    ? activeCommitments
-    : activeCommitments.slice(0, 3);
+  const displayedCommitments = activeCommitments.slice(0, 3);
 
   const sortedTransactions = useMemo(() => {
     return [...transactions].sort(
@@ -691,9 +684,7 @@ function DashboardView() {
     );
   }, [transactions]);
 
-  const displayedTransactions = showAllTransactions
-    ? sortedTransactions
-    : sortedTransactions.slice(0, 5);
+  const displayedTransactions = sortedTransactions.slice(0, 5);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
