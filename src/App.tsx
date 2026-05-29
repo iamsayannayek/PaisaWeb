@@ -44,10 +44,8 @@ import {
   Copy,
   ChevronLeft,
   ChevronRight,
-  Calendar,
   Edit2,
   List,
-  Circle,
   CheckCircle2,
 } from "lucide-react";
 
