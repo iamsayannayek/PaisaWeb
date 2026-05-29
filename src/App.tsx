@@ -46,6 +46,7 @@ import {
   ChevronRight,
   Calendar,
   Edit2,
+  List,
 } from "lucide-react";
 
 // --- TYPES ---
@@ -121,6 +122,8 @@ interface MonthEndTask {
 interface AppState {
   isDarkMode: boolean;
   toggleTheme: () => void;
+  activeTab: string;
+  setActiveTab: (t: string) => void;
   currentMonth: string;
   setCurrentMonth: (m: string) => void;
   accounts: Account[];
@@ -617,6 +620,7 @@ function DashboardView() {
     openCommitmentModal,
     budgets,
     currentMonth,
+    setActiveTab,
   } = useContext(AppContext)!;
   const [graphFilter, setGraphFilter] = useState<"both" | "spent" | "saved">(
     "both",
@@ -663,6 +667,23 @@ function DashboardView() {
       saved: currentMonthIncome - currentMonthExpenses,
     },
   ];
+
+  // Sorting logics
+  const sortedCommitments = useMemo(() => {
+    return [...commitments].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+  }, [commitments]);
+
+  const displayedCommitments = sortedCommitments.slice(0, 3);
+
+  const sortedTransactions = useMemo(() => {
+    return [...transactions].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+  }, [transactions]);
+
+  const displayedTransactions = sortedTransactions.slice(0, 5);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -902,8 +923,8 @@ function DashboardView() {
               <Plus size={16} /> New Commitment
             </button>
           </div>
-          <div className="space-y-4">
-            {commitments.map((c) => {
+          <div className="space-y-3">
+            {displayedCommitments.map((c) => {
               const linkedBudget = budgets.find(
                 (b) => b.id === c.linkedBudgetId,
               );
@@ -940,10 +961,20 @@ function DashboardView() {
                 </div>
               );
             })}
+
             {commitments.length === 0 && (
               <p className="text-sm text-slate-500 text-center py-4">
                 No upcoming commitments recorded.
               </p>
+            )}
+
+            {commitments.length > 3 && (
+              <button
+                onClick={() => setActiveTab("all_commitments")}
+                className="w-full mt-2 py-2.5 flex items-center justify-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+              >
+                <List size={16} /> View All {commitments.length} Commitments
+              </button>
             )}
           </div>
         </Card>
@@ -957,7 +988,7 @@ function DashboardView() {
             <span className="text-xs text-slate-500">Click to edit</span>
           </div>
           <div className="space-y-3">
-            {transactions.slice(0, 5).map((t) => (
+            {displayedTransactions.map((t) => (
               <div
                 key={t.id}
                 onClick={() => openTxModal(t)}
@@ -1010,10 +1041,20 @@ function DashboardView() {
                 </div>
               </div>
             ))}
+
             {transactions.length === 0 && (
               <p className="text-sm text-slate-500 text-center py-4">
                 No transactions recorded.
               </p>
+            )}
+
+            {transactions.length > 5 && (
+              <button
+                onClick={() => setActiveTab("all_transactions")}
+                className="w-full mt-2 py-2.5 flex items-center justify-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+              >
+                <List size={16} /> View All {transactions.length} Transactions
+              </button>
             )}
           </div>
         </Card>
@@ -1573,6 +1614,204 @@ function MonthEndView() {
   );
 }
 
+function AllCommitmentsView() {
+  const { commitments, budgets, openCommitmentModal, setActiveTab } =
+    useContext(AppContext)!;
+
+  const sortedCommitments = useMemo(() => {
+    return [...commitments].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+  }, [commitments]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+              All Commitments
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Manage all your upcoming bills.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => openCommitmentModal()}
+          className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors text-sm"
+        >
+          <Plus size={16} />{" "}
+          <span className="hidden sm:inline">New Commitment</span>
+        </button>
+      </header>
+
+      <Card>
+        <div className="space-y-3">
+          {sortedCommitments.map((c) => {
+            const linkedBudget = budgets.find((b) => b.id === c.linkedBudgetId);
+            return (
+              <div
+                key={c.id}
+                onClick={() => openCommitmentModal(c)}
+                className="flex justify-between items-center p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-indigo-500/50 transition-colors group"
+              >
+                <div className="flex items-center">
+                  <div className="p-3 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 mr-4">
+                    <Calendar size={20} />
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-900 dark:text-white text-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      {c.title}
+                      {linkedBudget && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-semibold border border-slate-300 dark:border-slate-700">
+                          Linked to {linkedBudget.category}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                      Due: {new Date(c.date).toLocaleDateString()} • {c.source}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-slate-900 dark:text-white text-lg">
+                    ₹{c.amount.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+
+          {commitments.length === 0 && (
+            <div className="text-center p-8 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
+              <p className="text-slate-500 mb-4">No commitments recorded.</p>
+              <button
+                onClick={() => openCommitmentModal()}
+                className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-medium"
+              >
+                Add your first one
+              </button>
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function AllTransactionsView() {
+  const { transactions, openTxModal, setActiveTab } = useContext(AppContext)!;
+
+  const sortedTransactions = useMemo(() => {
+    return [...transactions].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+  }, [transactions]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+              All Transactions
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Your complete financial history.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => openTxModal()}
+          className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors text-sm"
+        >
+          <Plus size={16} />{" "}
+          <span className="hidden sm:inline">New Transaction</span>
+        </button>
+      </header>
+
+      <Card>
+        <div className="space-y-3">
+          {sortedTransactions.map((t) => (
+            <div
+              key={t.id}
+              onClick={() => openTxModal(t)}
+              className="flex justify-between items-center p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-900/50 border border-slate-100 dark:border-slate-800 cursor-pointer transition-all group"
+            >
+              <div className="flex items-center">
+                <div
+                  className={`p-3 rounded-full mr-4 ${
+                    t.type === "INCOME"
+                      ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
+                      : t.type === "EXPENSE"
+                        ? "bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"
+                        : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                  }`}
+                >
+                  {t.type === "INCOME" ? (
+                    <ArrowDown size={18} />
+                  ) : t.type === "EXPENSE" ? (
+                    <ArrowUp size={18} />
+                  ) : (
+                    <ArrowRightLeft size={18} />
+                  )}
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900 dark:text-white text-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    {t.note}
+                  </p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                    {t.category} • {new Date(t.date).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`font-bold text-lg ${
+                    t.type === "INCOME"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : t.type === "EXPENSE"
+                        ? "text-slate-900 dark:text-white"
+                        : "text-slate-500"
+                  }`}
+                >
+                  {t.type === "INCOME" ? "+" : t.type === "EXPENSE" ? "-" : ""}₹
+                  {t.amount.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          {transactions.length === 0 && (
+            <div className="text-center p-8 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
+              <p className="text-slate-500 mb-4">No transactions recorded.</p>
+              <button
+                onClick={() => openTxModal()}
+                className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-medium"
+              >
+                Log a transaction
+              </button>
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // --- MAIN LAYOUT & APP ---
 
 export default function App() {
@@ -2017,6 +2256,8 @@ export default function App() {
   const appState: AppState = {
     isDarkMode,
     toggleTheme: () => setIsDarkMode(!isDarkMode),
+    activeTab,
+    setActiveTab,
     currentMonth,
     setCurrentMonth,
     accounts,
@@ -2161,6 +2402,8 @@ export default function App() {
           {activeTab === "budget" && <BudgetView />}
           {activeTab === "investments" && <InvestmentsView />}
           {activeTab === "monthend" && <MonthEndView />}
+          {activeTab === "all_commitments" && <AllCommitmentsView />}
+          {activeTab === "all_transactions" && <AllTransactionsView />}
         </main>
 
         {/* Floating Action Button (FAB) */}
