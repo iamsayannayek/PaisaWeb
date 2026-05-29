@@ -47,6 +47,8 @@ import {
   Calendar,
   Edit2,
   List,
+  Circle,
+  CheckCircle2,
 } from "lucide-react";
 
 // --- TYPES ---
@@ -90,8 +92,10 @@ interface Commitment {
   title: string;
   amount: number;
   date: string;
-  source: string;
+  sourceId: string;
+  destId?: string;
   linkedBudgetId?: string;
+  isPaid?: boolean;
 }
 
 interface Goal {
@@ -108,6 +112,7 @@ interface Investment {
   name: string;
   type: string;
   monthlyContribution: number;
+  frequency?: string; // Monthly, Quarterly, Yearly
   totalInvested: number;
   currentValue: number;
   treatAsExpense: boolean;
@@ -153,6 +158,7 @@ interface AppState {
   updateCommitment: (id: string, c: Partial<Commitment>) => void;
   deleteCommitment: (id: string) => void;
   openCommitmentModal: (c?: Commitment) => void;
+  markCommitmentPaid: (id: string) => void;
 
   addGoal: (g: Omit<Goal, "id">) => void;
   updateGoal: (id: string, g: Partial<Goal>) => void;
@@ -201,7 +207,7 @@ const SEED_ACCOUNTS: Account[] = [
     name: "SBI Bank",
     type: "BANK",
     balance: 85000,
-    purpose: "Emergency + PPF",
+    purpose: "Emergency",
     icon: "Landmark",
     color: "#0369a1",
   },
@@ -232,24 +238,6 @@ const SEED_ACCOUNTS: Account[] = [
     icon: "Wallet",
     color: "#0f172a",
   },
-  {
-    id: "a7",
-    name: "Brown Wallet",
-    type: "CASH_WALLET",
-    balance: 3000,
-    purpose: "Reserve cash",
-    icon: "Wallet",
-    color: "#78350f",
-  },
-  {
-    id: "a8",
-    name: "Coin Bag",
-    type: "CASH_WALLET",
-    balance: 245,
-    purpose: "Exact change",
-    icon: "Coins",
-    color: "#eab308",
-  },
 ];
 
 const SEED_TRANSACTIONS: Transaction[] = [
@@ -277,7 +265,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 1500,
     type: "TRANSFER",
     sourceId: "a1",
-    destId: "a4",
+    destId: "i1",
     category: "Investment",
     note: "MF Transfer",
   },
@@ -287,7 +275,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 500,
     type: "TRANSFER",
     sourceId: "a1",
-    destId: "a3",
+    destId: "i2",
     category: "Investment",
     note: "PPF Transfer",
   },
@@ -297,7 +285,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 1763,
     type: "TRANSFER",
     sourceId: "a1",
-    destId: "a4",
+    destId: "i3",
     category: "Sinking Fund",
     note: "LIC Monthly Provision",
   },
@@ -383,48 +371,91 @@ const SEED_BUDGETS: Budget[] = [
   },
 ];
 
+const SEED_INVESTMENTS: Investment[] = [
+  {
+    id: "i1",
+    name: "Mutual Fund (Equity)",
+    type: "MF",
+    monthlyContribution: 1500,
+    frequency: "Monthly",
+    totalInvested: 45000,
+    currentValue: 52300,
+    treatAsExpense: false,
+  },
+  {
+    id: "i2",
+    name: "PPF",
+    type: "PPF",
+    monthlyContribution: 500,
+    frequency: "Monthly",
+    totalInvested: 15000,
+    currentValue: 16100,
+    treatAsExpense: false,
+  },
+  {
+    id: "i3",
+    name: "LIC Jeevan Umang (745)",
+    type: "LIC",
+    monthlyContribution: 5300,
+    frequency: "Quarterly",
+    totalInvested: 21156,
+    currentValue: 9500,
+    treatAsExpense: true,
+  },
+];
+
 const SEED_COMMITMENTS: Commitment[] = [
   {
     id: "c1",
     title: "Home Remittance",
     amount: 8000,
     date: "2026-05-02",
-    source: "HDFC Bank",
+    sourceId: "a1",
+    isPaid: false,
   },
   {
     id: "c2",
     title: "Mutual Fund SIPs",
     amount: 1500,
     date: "2026-05-05",
-    source: "Canara Bank",
+    sourceId: "a4",
+    destId: "i1",
+    isPaid: false,
   },
   {
     id: "c3",
     title: "PPF Investment",
     amount: 500,
     date: "2026-05-05",
-    source: "SBI Bank",
+    sourceId: "a3",
+    destId: "i2",
+    isPaid: false,
   },
   {
     id: "c4",
-    title: "LIC Premium Provision",
-    amount: 1763,
+    title: "LIC Premium (QTR)",
+    amount: 5300,
     date: "2026-05-28",
-    source: "Canara Bank (Holding)",
+    sourceId: "a4",
+    destId: "i3",
+    isPaid: false,
   },
   {
     id: "c5",
-    title: "Train Pass Provision",
-    amount: 167,
+    title: "Train Pass",
+    amount: 500,
     date: "2026-05-01",
-    source: "Cash Wallet",
+    sourceId: "a5",
+    isPaid: false,
   },
   {
     id: "c6",
     title: "Daily Transport Cash",
     amount: 1500,
     date: "2026-05-01",
-    source: "Cash Wallet",
+    sourceId: "a1",
+    destId: "a5",
+    isPaid: false,
   },
 ];
 
@@ -447,36 +478,6 @@ const SEED_GOALS: Goal[] = [
   },
 ];
 
-const SEED_INVESTMENTS: Investment[] = [
-  {
-    id: "i1",
-    name: "Mutual Fund (Equity)",
-    type: "MF",
-    monthlyContribution: 1500,
-    totalInvested: 45000,
-    currentValue: 52300,
-    treatAsExpense: false,
-  },
-  {
-    id: "i2",
-    name: "PPF",
-    type: "PPF",
-    monthlyContribution: 500,
-    totalInvested: 15000,
-    currentValue: 16100,
-    treatAsExpense: false,
-  },
-  {
-    id: "i3",
-    name: "LIC Jeevan Umang (745)",
-    type: "LIC",
-    monthlyContribution: 1763,
-    totalInvested: 21156,
-    currentValue: 9500,
-    treatAsExpense: true,
-  },
-];
-
 const SEED_TASKS: MonthEndTask[] = [
   {
     id: "tk1",
@@ -490,7 +491,7 @@ const SEED_TASKS: MonthEndTask[] = [
   },
   {
     id: "tk3",
-    text: "Move ₹1,763 (LIC) and ₹167 (Train) provisions to Canara Bank",
+    text: "Move provisions for next month (LIC, Train) to Canara Bank",
     isCompleted: false,
   },
   {
@@ -500,7 +501,7 @@ const SEED_TASKS: MonthEndTask[] = [
   },
   {
     id: "tk5",
-    text: "Withdraw ₹1,500 cash for next month's daily transport",
+    text: "Withdraw cash for next month's daily transport",
     isCompleted: false,
   },
 ];
@@ -614,6 +615,7 @@ const renderAppIcon = (name: string, size: number = 20) => {
 function DashboardView() {
   const {
     accounts,
+    investments,
     transactions,
     openTxModal,
     commitments,
@@ -621,10 +623,14 @@ function DashboardView() {
     budgets,
     currentMonth,
     setActiveTab,
+    markCommitmentPaid,
   } = useContext(AppContext)!;
   const [graphFilter, setGraphFilter] = useState<"both" | "spent" | "saved">(
     "both",
   );
+
+  const [showAllCommitments, setShowAllCommitments] = useState(false);
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
 
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
 
@@ -669,13 +675,15 @@ function DashboardView() {
   ];
 
   // Sorting logics
-  const sortedCommitments = useMemo(() => {
-    return [...commitments].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    );
+  const activeCommitments = useMemo(() => {
+    return [...commitments]
+      .filter((c) => !c.isPaid)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [commitments]);
 
-  const displayedCommitments = sortedCommitments.slice(0, 3);
+  const displayedCommitments = showAllCommitments
+    ? activeCommitments
+    : activeCommitments.slice(0, 3);
 
   const sortedTransactions = useMemo(() => {
     return [...transactions].sort(
@@ -683,7 +691,9 @@ function DashboardView() {
     );
   }, [transactions]);
 
-  const displayedTransactions = sortedTransactions.slice(0, 5);
+  const displayedTransactions = showAllTransactions
+    ? sortedTransactions
+    : sortedTransactions.slice(0, 5);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -928,6 +938,13 @@ function DashboardView() {
               const linkedBudget = budgets.find(
                 (b) => b.id === c.linkedBudgetId,
               );
+              const sourceAcc = accounts.find((a) => a.id === c.sourceId);
+              const destAcc = accounts.find((a) => a.id === c.destId);
+              const destInv = investments.find((i) => i.id === c.destId);
+
+              const destName = destAcc?.name || destInv?.name;
+              const fallbackSourceStr = (c as any).source;
+
               return (
                 <div
                   key={c.id}
@@ -935,9 +952,19 @@ function DashboardView() {
                   className="flex justify-between items-center p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-indigo-500/50 transition-colors group"
                 >
                   <div className="flex items-center">
-                    <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 mr-3">
-                      <Calendar size={18} />
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        markCommitmentPaid(c.id);
+                      }}
+                      className="p-1.5 mr-3 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 text-transparent hover:text-emerald-500 hover:border-emerald-500 transition-colors"
+                      title="Mark as Paid"
+                    >
+                      <CheckCircle2
+                        size={18}
+                        className="fill-current bg-white dark:bg-slate-800 rounded-full"
+                      />
+                    </button>
                     <div>
                       <p className="font-medium text-slate-900 dark:text-white text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                         {c.title}
@@ -948,8 +975,16 @@ function DashboardView() {
                         )}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Due: {new Date(c.date).toLocaleDateString()} •{" "}
-                        {c.source}
+                        Due: {new Date(c.date).toLocaleDateString()} • From:{" "}
+                        <span className="font-medium">
+                          {sourceAcc?.name || fallbackSourceStr || "Unknown"}
+                        </span>
+                        {destName && (
+                          <span className="font-medium text-indigo-500">
+                            {" "}
+                            → To: {destName}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -962,18 +997,19 @@ function DashboardView() {
               );
             })}
 
-            {commitments.length === 0 && (
+            {activeCommitments.length === 0 && (
               <p className="text-sm text-slate-500 text-center py-4">
-                No upcoming commitments recorded.
+                No upcoming commitments right now.
               </p>
             )}
 
-            {commitments.length > 3 && (
+            {activeCommitments.length > 3 && (
               <button
                 onClick={() => setActiveTab("all_commitments")}
                 className="w-full mt-2 py-2.5 flex items-center justify-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
               >
-                <List size={16} /> View All {commitments.length} Commitments
+                <List size={16} /> View All {activeCommitments.length}{" "}
+                Commitments
               </button>
             )}
           </div>
@@ -1165,16 +1201,20 @@ function BudgetView() {
     copyBudgets,
   } = useContext(AppContext)!;
 
-  // Dynamically calculate income for the current month
   const currentMonthIncome = transactions
     .filter((t) => t.type === "INCOME" && t.date.startsWith(currentMonth))
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Dynamically calculate fixed deductions based on the commitments
-  const fixedDeductions = commitments.reduce((sum, c) => sum + c.amount, 0);
+  // Math perfectly preserves True Available even if a commitment is marked as "Paid"!
+  const fixedDeductions = commitments
+    .filter((c) => c.date.startsWith(currentMonth))
+    .reduce((sum, c) => sum + c.amount, 0);
+
   const trueSpendable = currentMonthIncome - fixedDeductions;
 
   const currentBudgets = budgets.filter((b) => b.month === currentMonth);
+
+  const totalBudgeted = currentBudgets.reduce((sum, b) => sum + b.limit, 0);
 
   const calculateSpent = (category: string) => {
     return transactions
@@ -1186,6 +1226,12 @@ function BudgetView() {
       )
       .reduce((sum, t) => sum + t.amount, 0);
   };
+
+  const totalSpentInBudgets = currentBudgets.reduce(
+    (sum, b) => sum + calculateSpent(b.category),
+    0,
+  );
+  const unallocated = trueSpendable - totalBudgeted;
 
   const handlePrevMonth = () => {
     const [y, m] = currentMonth.split("-").map(Number);
@@ -1299,12 +1345,42 @@ function BudgetView() {
             </div>
           </div>
           <p className="text-xs text-slate-400 mt-4 max-w-lg">
-            Fixed deductions dynamically match the sum of your Upcoming
-            Commitments. Income tracks your recorded Income transactions for
-            this month.
+            Fixed deductions continuously match the sum of ALL your Commitments
+            for this month (paid & unpaid). Income tracks your recorded Income
+            transactions.
           </p>
         </div>
       </Card>
+
+      {/* Budget Summary Engine */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <Card className="p-4 flex flex-col justify-center bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+            Total Budgeted
+          </span>
+          <span className="text-xl font-bold text-slate-900 dark:text-white">
+            ₹{totalBudgeted.toLocaleString()}
+          </span>
+        </Card>
+        <Card className="p-4 flex flex-col justify-center bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+            Total Spent
+          </span>
+          <span className="text-xl font-bold text-slate-900 dark:text-white">
+            ₹{totalSpentInBudgets.toLocaleString()}
+          </span>
+        </Card>
+        <Card className="p-4 flex flex-col justify-center bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 col-span-2 md:col-span-1">
+          <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">
+            Left to Assign
+          </span>
+          <span
+            className={`text-2xl font-bold ${unallocated < 0 ? "text-rose-600 dark:text-rose-400" : "text-indigo-700 dark:text-indigo-300"}`}
+          >
+            ₹{unallocated.toLocaleString()}
+          </span>
+        </Card>
+      </div>
 
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-slate-800 dark:text-white">
@@ -1454,9 +1530,12 @@ function InvestmentsView() {
           </div>
           <div className="space-y-4">
             {investments.map((inv) => {
-              const returns = inv.currentValue - inv.totalInvested;
-              const returnsPct = (returns / inv.totalInvested) * 100;
-              const isPositive = returns >= 0;
+              const freqText =
+                inv.frequency === "Quarterly"
+                  ? "/qtr"
+                  : inv.frequency === "Yearly"
+                    ? "/yr"
+                    : "/mo";
 
               return (
                 <Card
@@ -1475,23 +1554,14 @@ function InvestmentsView() {
                         )}
                       </h4>
                       <p className="text-xs text-slate-500">
-                        SIP: ₹{inv.monthlyContribution.toLocaleString()}/mo
+                        Contribution: ₹
+                        {inv.monthlyContribution.toLocaleString()}
+                        {freqText}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-lg text-slate-900 dark:text-white">
                         ₹{inv.currentValue.toLocaleString()}
-                      </p>
-                      <p
-                        className={`text-xs font-medium flex items-center justify-end ${isPositive ? "text-emerald-500" : "text-rose-500"}`}
-                      >
-                        {isPositive ? (
-                          <TrendingUp size={12} className="mr-1" />
-                        ) : (
-                          <ArrowDown size={12} className="mr-1" />
-                        )}
-                        {isPositive ? "+" : ""}₹{returns.toLocaleString()} (
-                        {returnsPct.toFixed(1)}%)
                       </p>
                     </div>
                   </div>
@@ -1615,13 +1685,20 @@ function MonthEndView() {
 }
 
 function AllCommitmentsView() {
-  const { commitments, budgets, openCommitmentModal, setActiveTab } =
-    useContext(AppContext)!;
+  const {
+    accounts,
+    investments,
+    commitments,
+    budgets,
+    openCommitmentModal,
+    setActiveTab,
+    markCommitmentPaid,
+  } = useContext(AppContext)!;
 
-  const sortedCommitments = useMemo(() => {
-    return [...commitments].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    );
+  const activeCommitments = useMemo(() => {
+    return [...commitments]
+      .filter((c) => !c.isPaid)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [commitments]);
 
   return (
@@ -1654,8 +1731,15 @@ function AllCommitmentsView() {
 
       <Card>
         <div className="space-y-3">
-          {sortedCommitments.map((c) => {
+          {activeCommitments.map((c) => {
             const linkedBudget = budgets.find((b) => b.id === c.linkedBudgetId);
+            const sourceAcc = accounts.find((a) => a.id === c.sourceId);
+            const destAcc = accounts.find((a) => a.id === c.destId);
+            const destInv = investments.find((i) => i.id === c.destId);
+
+            const destName = destAcc?.name || destInv?.name;
+            const fallbackSourceStr = (c as any).source;
+
             return (
               <div
                 key={c.id}
@@ -1663,9 +1747,19 @@ function AllCommitmentsView() {
                 className="flex justify-between items-center p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-indigo-500/50 transition-colors group"
               >
                 <div className="flex items-center">
-                  <div className="p-3 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 mr-4">
-                    <Calendar size={20} />
-                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      markCommitmentPaid(c.id);
+                    }}
+                    className="p-2 mr-4 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 text-transparent hover:text-emerald-500 hover:border-emerald-500 transition-colors"
+                    title="Mark as Paid"
+                  >
+                    <CheckCircle2
+                      size={20}
+                      className="fill-current bg-white dark:bg-slate-800 rounded-full"
+                    />
+                  </button>
                   <div>
                     <p className="font-medium text-slate-900 dark:text-white text-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                       {c.title}
@@ -1676,7 +1770,16 @@ function AllCommitmentsView() {
                       )}
                     </p>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                      Due: {new Date(c.date).toLocaleDateString()} • {c.source}
+                      Due: {new Date(c.date).toLocaleDateString()} • From:{" "}
+                      <span className="font-medium">
+                        {sourceAcc?.name || fallbackSourceStr || "Unknown"}
+                      </span>
+                      {destName && (
+                        <span className="font-medium text-indigo-500">
+                          {" "}
+                          → To: {destName}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1689,14 +1792,16 @@ function AllCommitmentsView() {
             );
           })}
 
-          {commitments.length === 0 && (
+          {activeCommitments.length === 0 && (
             <div className="text-center p-8 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
-              <p className="text-slate-500 mb-4">No commitments recorded.</p>
+              <p className="text-slate-500 mb-4">
+                No unpaid commitments found.
+              </p>
               <button
                 onClick={() => openCommitmentModal()}
                 className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg font-medium"
               >
-                Add your first one
+                Add a new one
               </button>
             </div>
           )}
@@ -1910,15 +2015,17 @@ export default function App() {
   const [budgetForm, setBudgetForm] = useState<Partial<Budget>>({
     color: "#3b82f6",
     icon: "Wallet",
-    month: "2026-05",
+    month: currentMonth,
   });
   const [commitmentForm, setCommitmentForm] = useState<Partial<Commitment>>({
     date: new Date().toISOString().split("T")[0],
+    sourceId: "",
   });
   const [goalForm, setGoalForm] = useState<Partial<Goal>>({});
   const [invForm, setInvForm] = useState<Partial<Investment>>({
     treatAsExpense: false,
     type: "MF",
+    frequency: "Monthly",
   });
   const [taskForm, setTaskForm] = useState<Partial<MonthEndTask>>({ text: "" });
 
@@ -1927,18 +2034,79 @@ export default function App() {
     else document.documentElement.classList.remove("dark");
   }, [isDarkMode]);
 
-  // Actions
-  const addTransaction = (t: Omit<Transaction, "id">) => {
-    setTransactions((prev) => [{ ...t, id: Date.now().toString() }, ...prev]);
-  };
-
-  const updateTransaction = (id: string, newTx: Partial<Transaction>) => {
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...newTx } : t)),
+  // --- Core Accounting Engine ---
+  const applyTransactionToAccounts = (
+    t: Partial<Transaction>,
+    revert = false,
+  ) => {
+    const multiplier = revert ? -1 : 1;
+    setAccounts((prev) =>
+      prev.map((a) => {
+        let newBalance = a.balance;
+        if (t.type === "INCOME" && a.id === t.sourceId)
+          newBalance += (t.amount || 0) * multiplier;
+        if (t.type === "EXPENSE" && a.id === t.sourceId)
+          newBalance -= (t.amount || 0) * multiplier;
+        if (t.type === "TRANSFER") {
+          if (a.id === t.sourceId) newBalance -= (t.amount || 0) * multiplier;
+          if (a.id === t.destId) newBalance += (t.amount || 0) * multiplier;
+        }
+        return { ...a, balance: newBalance };
+      }),
     );
   };
 
+  const applyTransactionToInvestments = (
+    t: Partial<Transaction>,
+    revert = false,
+  ) => {
+    if (t.type === "TRANSFER" && t.destId) {
+      const multiplier = revert ? -1 : 1;
+      setInvestments((prev) =>
+        prev.map((inv) => {
+          if (inv.id === t.destId) {
+            return {
+              ...inv,
+              totalInvested:
+                (inv.totalInvested || 0) + (t.amount || 0) * multiplier,
+              currentValue:
+                (inv.currentValue || 0) + (t.amount || 0) * multiplier,
+            };
+          }
+          return inv;
+        }),
+      );
+    }
+  };
+
+  // Actions
+  const addTransaction = (t: Omit<Transaction, "id">) => {
+    const newTx = { ...t, id: Date.now().toString() };
+    setTransactions((prev) => [newTx, ...prev]);
+    applyTransactionToAccounts(newTx);
+    applyTransactionToInvestments(newTx);
+  };
+
+  const updateTransaction = (id: string, newTx: Partial<Transaction>) => {
+    const oldTx = transactions.find((t) => t.id === id);
+    if (oldTx) {
+      applyTransactionToAccounts(oldTx, true); // Revert old from balances
+      applyTransactionToInvestments(oldTx, true); // Revert old from investments
+    }
+
+    const fullNewTx = { ...oldTx, ...newTx } as Transaction;
+    setTransactions((prev) => prev.map((t) => (t.id === id ? fullNewTx : t)));
+
+    applyTransactionToAccounts(fullNewTx); // Apply new to balances
+    applyTransactionToInvestments(fullNewTx); // Apply new to investments
+  };
+
   const deleteTransaction = (id: string) => {
+    const oldTx = transactions.find((t) => t.id === id);
+    if (oldTx) {
+      applyTransactionToAccounts(oldTx, true); // Revert from balances
+      applyTransactionToInvestments(oldTx, true); // Revert from investments
+    }
     setTransactions((prev) => prev.filter((t) => t.id !== id));
   };
 
@@ -2091,7 +2259,11 @@ export default function App() {
     } else {
       setCommitments((prev) => [
         ...prev,
-        { ...commitmentForm, id: Date.now().toString() } as Commitment,
+        {
+          ...commitmentForm,
+          id: Date.now().toString(),
+          isPaid: false,
+        } as Commitment,
       ]);
     }
     setIsCommitmentModalOpen(false);
@@ -2109,18 +2281,74 @@ export default function App() {
   const openCommitmentModal = (c?: Commitment) => {
     if (c) {
       setEditingCommitment(c);
-      setCommitmentForm(c);
+
+      // Auto-fix for any old saved commitments that used string text instead of IDs
+      let safeSourceId = c.sourceId;
+      if (!safeSourceId && (c as any).source) {
+        const matched = accounts.find((a) =>
+          (c as any).source.toLowerCase().includes(a.name.toLowerCase()),
+        );
+        if (matched) safeSourceId = matched.id;
+      }
+
+      setCommitmentForm({ ...c, sourceId: safeSourceId });
     } else {
       setEditingCommitment(undefined);
       setCommitmentForm({
         title: "",
         amount: 0,
         date: new Date().toISOString().split("T")[0],
-        source: "",
+        sourceId: accounts[0]?.id,
+        destId: "",
         linkedBudgetId: "",
       });
     }
     setIsCommitmentModalOpen(true);
+  };
+
+  const markCommitmentPaid = (id: string) => {
+    const c = commitments.find((x) => x.id === id);
+    if (!c) return;
+
+    // 1. Mark as paid
+    setCommitments((prev) =>
+      prev.map((x) => (x.id === id ? { ...x, isPaid: true } : x)),
+    );
+
+    // 2. Determine best source account mapping (handles older text-based sources smoothly)
+    let sourceId = c.sourceId;
+    if (!sourceId && (c as any).source) {
+      const matchedAcc = accounts.find((a) =>
+        (c as any).source.toLowerCase().includes(a.name.toLowerCase()),
+      );
+      sourceId = matchedAcc ? matchedAcc.id : accounts[0]?.id || "";
+    } else if (!sourceId) {
+      sourceId = accounts[0]?.id || "";
+    }
+
+    // 3. Auto-generate Transaction (The engine will handle deducting the account balance automatically)
+    const linkedBudget = budgets.find((b) => b.id === c.linkedBudgetId);
+
+    // Evaluate if destId maps to an investment or an account
+    const isDestAccount = accounts.some((a) => a.id === c.destId);
+    const isDestInvestment = investments.some((i) => i.id === c.destId);
+    const isTransfer = isDestAccount || isDestInvestment;
+
+    const category = linkedBudget
+      ? linkedBudget.category
+      : isTransfer
+        ? "Investment / Transfer"
+        : "Commitment";
+
+    addTransaction({
+      date: c.date,
+      amount: c.amount,
+      type: isTransfer ? "TRANSFER" : "EXPENSE",
+      sourceId,
+      destId: c.destId,
+      category,
+      note: c.title,
+    });
   };
 
   // --- Goal Handlers ---
@@ -2191,13 +2419,14 @@ export default function App() {
   const openInvestmentModal = (i?: Investment) => {
     if (i) {
       setEditingInv(i);
-      setInvForm(i);
+      setInvForm({ ...i, frequency: i.frequency || "Monthly" });
     } else {
       setEditingInv(undefined);
       setInvForm({
         name: "",
         type: "MF",
         monthlyContribution: 0,
+        frequency: "Monthly",
         totalInvested: 0,
         currentValue: 0,
         treatAsExpense: false,
@@ -2295,6 +2524,7 @@ export default function App() {
     deleteCommitment: (id) =>
       setCommitments((prev) => prev.filter((x) => x.id !== id)),
     openCommitmentModal,
+    markCommitmentPaid,
     addGoal: (g) =>
       setGoals((prev) => [...prev, { ...g, id: Date.now().toString() }]),
     updateGoal: (id, g) =>
@@ -2472,18 +2702,20 @@ export default function App() {
                   <option value="" disabled>
                     Select...
                   </option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
+                  <optgroup label="Accounts">
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 
               {txForm.type === "TRANSFER" ? (
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">
-                    To Account
+                    To Destination
                   </label>
                   <select
                     value={txForm.destId || ""}
@@ -2495,11 +2727,20 @@ export default function App() {
                     <option value="" disabled>
                       Select...
                     </option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
+                    <optgroup label="Accounts">
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Investments & Portfolios">
+                      {investments.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
               ) : (
@@ -2526,6 +2767,7 @@ export default function App() {
                       </option>
                     ))}
                     <option value="Salary">Salary</option>
+                    <option value="Commitment">Commitment</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
@@ -2605,6 +2847,7 @@ export default function App() {
                 placeholder="e.g. LIC Premium (QTR)"
               />
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
@@ -2639,23 +2882,64 @@ export default function App() {
                 />
               </div>
             </div>
+
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">
-                Source Account / Location
+                Source Account
               </label>
-              <input
-                type="text"
-                value={commitmentForm.source || ""}
+              <select
+                value={commitmentForm.sourceId || ""}
                 onChange={(e) =>
                   setCommitmentForm((prev) => ({
                     ...prev,
-                    source: e.target.value,
+                    sourceId: e.target.value,
                   }))
                 }
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
-                placeholder="e.g. Canara Bank (Holding)"
-              />
+              >
+                <option value="" disabled>
+                  Select Source...
+                </option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
             </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                Destination (If Transfer/Investment)
+              </label>
+              <select
+                value={commitmentForm.destId || ""}
+                onChange={(e) =>
+                  setCommitmentForm((prev) => ({
+                    ...prev,
+                    destId: e.target.value,
+                  }))
+                }
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+              >
+                <option value="">-- None (Treat as Expense) --</option>
+                <optgroup label="Accounts">
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Investments & Portfolios">
+                  {investments.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">
                 Link to Budget Category (Optional)
@@ -2679,11 +2963,8 @@ export default function App() {
                     </option>
                   ))}
               </select>
-              <p className="text-[10px] text-slate-400 mt-1">
-                Linking it tags this commitment alongside your existing monthly
-                envelope budget.
-              </p>
             </div>
+
             <div className="flex gap-3 pt-2">
               {editingCommitment && (
                 <button
@@ -3101,7 +3382,28 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Monthly SIP (₹)
+                  Contribution Frequency
+                </label>
+                <select
+                  value={invForm.frequency || "Monthly"}
+                  onChange={(e) =>
+                    setInvForm((prev) => ({
+                      ...prev,
+                      frequency: e.target.value,
+                    }))
+                  }
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                >
+                  <option value="Monthly">Monthly</option>
+                  <option value="Quarterly">Quarterly</option>
+                  <option value="Yearly">Yearly</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Contribution Amount (₹)
                 </label>
                 <input
                   type="number"
@@ -3115,8 +3417,6 @@ export default function App() {
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
                   Total Invested (₹)
@@ -3133,22 +3433,22 @@ export default function App() {
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Current Value (₹)
-                </label>
-                <input
-                  type="number"
-                  value={invForm.currentValue || ""}
-                  onChange={(e) =>
-                    setInvForm((prev) => ({
-                      ...prev,
-                      currentValue: Number(e.target.value),
-                    }))
-                  }
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
-                />
-              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                Current Value (₹)
+              </label>
+              <input
+                type="number"
+                value={invForm.currentValue || ""}
+                onChange={(e) =>
+                  setInvForm((prev) => ({
+                    ...prev,
+                    currentValue: Number(e.target.value),
+                  }))
+                }
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+              />
             </div>
             <div className="flex items-center gap-2 pt-2">
               <input
@@ -3167,7 +3467,7 @@ export default function App() {
                 htmlFor="treatAsExpense"
                 className="text-sm font-medium text-slate-700 dark:text-slate-300"
               >
-                Treat monthly SIP as an Expense in Budgets
+                Treat contribution as an Expense in Budgets
               </label>
             </div>
             <div className="flex gap-3 pt-2">
