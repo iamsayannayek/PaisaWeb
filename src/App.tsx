@@ -114,9 +114,9 @@ interface Investment {
   totalInvested: number;
   currentValue: number;
   treatAsExpense: boolean;
-  showReturns?: boolean; // Toggles the green/red percentages
-  interestRate?: number; // Used for FD/RD/Others
-  durationDays?: number; // Used for FD/RD/Others
+  showReturns?: boolean;
+  interestRate?: number;
+  durationDays?: number;
 }
 
 interface MonthEndTask {
@@ -177,6 +177,8 @@ interface AppState {
   deleteMonthEndTask: (id: string) => void;
   toggleMonthEndTask: (id: string) => void;
   openTaskModal: (t?: MonthEndTask) => void;
+
+  openResetModal: () => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -628,6 +630,7 @@ function DashboardView() {
     currentMonth,
     setActiveTab,
     markCommitmentPaid,
+    openResetModal,
   } = useContext(AppContext)!;
   const [graphFilter, setGraphFilter] = useState<"both" | "spent" | "saved">(
     "both",
@@ -663,17 +666,27 @@ function DashboardView() {
     }));
   }, [transactions, currentMonth]);
 
-  const savingsData = [
-    { name: "Jan", spent: 18000, saved: 7000 },
-    { name: "Feb", spent: 17500, saved: 7500 },
-    { name: "Mar", spent: 19000, saved: 6000 },
-    { name: "Apr", spent: 16000, saved: 9000 },
-    {
-      name: "Current",
-      spent: currentMonthExpenses,
-      saved: currentMonthIncome - currentMonthExpenses,
-    },
-  ];
+  // Dynamically generate savings data based on actual transactions
+  const savingsData = useMemo(() => {
+    const data = [];
+    const [year, month] = currentMonth.split("-").map(Number);
+
+    for (let i = 4; i >= 0; i--) {
+      const d = new Date(year, month - 1 - i, 1);
+      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const monthName = d.toLocaleString("default", { month: "short" });
+
+      const spent = transactions
+        .filter((t) => t.type === "EXPENSE" && t.date.startsWith(monthStr))
+        .reduce((sum, t) => sum + t.amount, 0);
+      const income = transactions
+        .filter((t) => t.type === "INCOME" && t.date.startsWith(monthStr))
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      data.push({ name: monthName, spent, saved: income - spent });
+    }
+    return data;
+  }, [transactions, currentMonth]);
 
   // Sorting logics
   const activeCommitments = useMemo(() => {
@@ -702,6 +715,14 @@ function DashboardView() {
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {TODAY_DATE_FORMATTED}
           </p>
+        </div>
+        <div className="mt-4 sm:mt-0 flex gap-2">
+          <button
+            onClick={() => openResetModal()}
+            className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors text-sm"
+          >
+            Reset Data
+          </button>
         </div>
       </header>
 
@@ -995,9 +1016,15 @@ function DashboardView() {
             })}
 
             {activeCommitments.length === 0 && (
-              <p className="text-sm text-slate-500 text-center py-4">
-                No upcoming commitments right now.
-              </p>
+              <div className="py-6 flex flex-col items-center justify-center text-center">
+                <div className="text-2xl mb-2">🎉</div>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                  All commitments settled!
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  You have no upcoming bills.
+                </p>
+              </div>
             )}
 
             {activeCommitments.length > 3 && (
@@ -1076,8 +1103,8 @@ function DashboardView() {
             ))}
 
             {transactions.length === 0 && (
-              <p className="text-sm text-slate-500 text-center py-4">
-                No transactions recorded.
+              <p className="text-sm text-slate-500 text-center py-6">
+                No transactions this month.
               </p>
             )}
 
@@ -1542,7 +1569,6 @@ function InvestmentsView() {
 
               let maturityAmount = 0;
               if (isMaturityType && inv.interestRate && inv.durationDays) {
-                // Projection formula: Principal + Simple Interest based on days
                 maturityAmount =
                   inv.totalInvested +
                   inv.totalInvested *
@@ -2017,6 +2043,7 @@ export default function App() {
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   const [editingTx, setEditingTx] = useState<Transaction | undefined>(
     undefined,
@@ -2069,6 +2096,18 @@ export default function App() {
     if (isDarkMode) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
   }, [isDarkMode]);
+
+  // --- Reset All Data ---
+  const handleConfirmReset = () => {
+    setAccounts([]);
+    setTransactions([]);
+    setBudgets([]);
+    setCommitments([]);
+    setGoals([]);
+    setInvestments([]);
+    setMonthEndTasks([]);
+    setIsResetModalOpen(false);
+  };
 
   // --- Core Accounting Engine ---
   const applyTransactionToAccounts = (
@@ -2595,6 +2634,7 @@ export default function App() {
       setMonthEndTasks((prev) => prev.filter((x) => x.id !== id)),
     toggleMonthEndTask,
     openTaskModal,
+    openResetModal: () => setIsResetModalOpen(true),
   };
 
   const navItems = [
@@ -2684,6 +2724,39 @@ export default function App() {
         >
           <Plus size={24} />
         </button>
+
+        {/* Reset Data Modal */}
+        <Modal
+          isOpen={isResetModalOpen}
+          onClose={() => setIsResetModalOpen(false)}
+          title="Reset All Data"
+        >
+          <div className="space-y-4">
+            <p className="text-slate-600 dark:text-slate-300 text-sm">
+              Are you sure you want to completely clear all your accounts,
+              transactions, budgets, commitments, goals, and investments?
+              <br />
+              <br />
+              <strong className="text-rose-600 dark:text-rose-400">
+                This action cannot be undone.
+              </strong>
+            </p>
+            <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => setIsResetModalOpen(false)}
+                className="flex-1 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmReset}
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-medium transition-colors"
+              >
+                Yes, Reset Everything
+              </button>
+            </div>
+          </div>
+        </Modal>
 
         {/* Transaction Modal */}
         <Modal
